@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Carnicería Chávez – Registro de pedidos</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<style>
+:root{--bg:#f6f3ef;--card:#fff;--tx:#222;--mut:#777;--red:#b3123f;--bd:#e3ddd5;--ok:#1f7a3d}
+@media(prefers-color-scheme:dark){:root{--bg:#1c1a19;--card:#2a2725;--tx:#f1ece6;--mut:#a79f96;--bd:#3d3834;--red:#e0486f;--ok:#4cc27a}}
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,Arial,sans-serif;background:var(--bg);color:var(--tx)}
+header{background:var(--red);color:#fff;padding:14px 16px;font-size:1.3rem;font-weight:700}
+nav{display:flex;gap:6px;padding:10px;position:sticky;top:0;background:var(--bg);z-index:5}
+nav button{flex:1}
+main{max-width:900px;margin:auto;padding:10px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px;margin-bottom:12px}
+button{background:var(--card);color:var(--tx);border:1px solid var(--bd);border-radius:8px;padding:10px 12px;font-size:1rem;cursor:pointer}
+button.on,button.pri{background:var(--red);color:#fff;border-color:var(--red)}
+button.ok{background:var(--ok);color:#fff;border-color:var(--ok)}
+input{background:var(--bg);color:var(--tx);border:1px solid var(--bd);border-radius:8px;padding:9px;font-size:1rem;width:100%}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.grid button{text-align:left}.grid small{display:block;color:var(--mut)}
+.row{display:flex;gap:8px;align-items:center;margin:6px 0;flex-wrap:wrap}
+.row>span{flex:1;min-width:120px}.row input{width:120px}
+.tot{font-size:1.5rem;font-weight:700;text-align:right}
+.big{font-size:2rem;font-weight:800;color:var(--ok);text-align:center}
+table{width:100%;border-collapse:collapse;margin:6px 0}td,th{padding:6px;border-bottom:1px solid var(--bd);text-align:left;font-size:.92rem}
+.num{text-align:right;white-space:nowrap}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal div{min-height:58px;border:1px solid var(--bd);border-radius:8px;padding:4px;font-size:.78rem;cursor:pointer}
+.cal .h{min-height:auto;border:0;text-align:center;color:var(--mut);cursor:default}
+.cal b{display:block;color:var(--ok)}.cal .sel{outline:2px solid var(--red)}
+.mut{color:var(--mut)}.hide{display:none}
+.pill{display:inline-block;padding:2px 8px;border-radius:99px;background:var(--bg);border:1px solid var(--bd);font-size:.8rem}
+</style>
+</head>
+<body>
+<header>🥩 Carnicería Chávez</header>
+<nav>
+ <button id="t1" class="on" onclick="tab(1)">Nuevo pedido</button>
+ <button id="t2" onclick="tab(2)">Cierre del día</button>
+ <button id="t3" onclick="tab(3)">Respaldo</button>
+</nav>
+<main>
+
+<!-- ===== NUEVO PEDIDO ===== -->
+<section id="v1">
+ <div class="card">
+  <div class="mut" style="text-align:center">Vendido hoy</div>
+  <div class="big">$<span id="liveTotal">0.00</span></div>
+  <div class="mut" style="text-align:center"><span id="liveCount">0</span> pedidos · <span id="syncState"></span></div>
+ </div>
+ <div class="card">
+  <div class="row">
+   <button id="bRes" class="on" onclick="setType('Res')">RES</button>
+   <button id="bPue" onclick="setType('Puerco')">PUERCO</button>
+   <button id="bEdit" onclick="toggleEdit()">✏️ Precios</button>
+  </div>
+  <div id="prods" class="grid"></div>
+ </div>
+ <div class="card">
+  <b>Pedido actual</b>
+  <div id="cart"><p class="mut">Toca un producto para agregarlo.</p></div>
+  <div class="tot">Total: $<span id="total">0.00</span></div>
+  <div class="row"><span>Pagó con ($)</span><input id="paid" type="number" inputmode="decimal" oninput="calc()"></div>
+  <div class="tot" style="font-size:1.1rem">Cambio: $<span id="change">0.00</span></div>
+  <div class="row"><button class="ok" style="flex:1" onclick="saveOrder()">💾 Guardar pedido</button><button onclick="cart=[];paid.value='';renderCart()">Limpiar</button></div>
+ </div>
+</section>
+
+<!-- ===== CIERRE DEL DÍA + CALENDARIO ===== -->
+<section id="v2" class="hide">
+ <div class="card">
+  <div class="row"><button onclick="goToday()">Hoy</button><input type="date" id="dayPick" onchange="showDay(this.value)"></div>
+  <div id="summary"></div>
+  <button class="pri" id="dayXls" onclick="exportDay(selDay)">📥 Excel de este día</button>
+ </div>
+ <div class="card">
+  <div class="row"><button onclick="moveMonth(-1)">◀</button><span id="mLabel" style="text-align:center;font-weight:700"></span><button onclick="moveMonth(1)">▶</button></div>
+  <div id="cal" class="cal"></div>
+ </div>
+</section>
+
+<!-- ===== RESPALDO ===== -->
+<section id="v3" class="hide">
+ <div class="card">
+  <b>Total general (todos los días)</b>
+  <div class="big">$<span id="grand">0.00</span></div>
+  <p id="stats" class="mut" style="text-align:center"></p>
+  <button class="pri" onclick="exportAll()">📥 Excel de todos los días (una hoja por día)</button>
+ </div>
+ <div class="card">
+  <b>Respaldo automático en Google Sheets</b>
+  <p class="mut">Pega aquí el enlace de tu Apps Script (te lo explico en los pasos). Cada pedido se enviará solo a tu hoja de Google, donde queda guardado para siempre.</p>
+  <input id="syncUrl" placeholder="https://script.google.com/macros/s/.../exec" onchange="saveUrl()">
+  <div class="row"><button onclick="syncPending(true)">🔄 Sincronizar ahora</button><span id="syncInfo" class="mut"></span></div>
+ </div>
+ <div class="card">
+  <b>Respaldo en archivo</b>
+  <div class="row"><button onclick="exportJSON()">📥 Descargar respaldo</button>
+  <button onclick="document.getElementById('imp').click()">📤 Restaurar (suma sin duplicar)</button></div>
+  <input id="imp" type="file" accept=".json" class="hide" onchange="importJSON(this)">
+ </div>
+</section>
+</main>
+
+<script>
+/* ---------- PRODUCTOS ---------- */
+const PRODUCTS=[
+ ["Res","Bistec de res",230],["Res","Cecina natural",270],["Res","Molida",220],["Res","Maciza",220],
+ ["Res","Retazo",185],["Res","Falda",250],["Res","Suadero",180],["Res","Aguja norteña",210],
+ ["Res","Costilla sin hueso",230],["Res","Picaña",230],["Res","Chambarete con hueso",185],["Res","Arrachera marinada",220],
+ ["Puerco","Bistec",150],["Puerco","Carne enchilada",180],["Puerco","Pastor",150],["Puerco","Maciza",140],
+ ["Puerco","Costilla",150],["Puerco","Chuleta",170],["Puerco","Longaniza",140],["Puerco","Molida",140],
+ ["Puerco","Chistorra",170],["Puerco","Chorizo argentino",180],["Puerco","Espinazo",120],["Puerco","Manitas",80],
+ ["Puerco","Cabeza",80],["Puerco","Molida mixta",180],["Puerco","Chuleta fresca",150],["Puerco","Manteca",75],
+ ["Puerco","Chicharrón prensado",125],["Puerco","Taquero",130]
+];
+
+/* ---------- ALMACENAMIENTO (no hay función para borrar pedidos) ---------- */
+const load=(k,d)=>{try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}};
+const save=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){alert("⚠️ No se pudo guardar en este navegador. Descarga el Excel ya.")}};
+try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}
+const DEFAULT_URL=""; // ← pega aquí tu enlace de Apps Script (entre las comillas) para que todos tus dispositivos lo usen solos
+let prices=load("prices",{}),orders=load("orders",[]),syncUrlVal=load("syncUrl","")||DEFAULT_URL;
+let cart=[],type="Res",edit=false,selDay=null,cur=new Date();
+const price=p=>prices[p[0]+"|"+p[1]]??p[2];
+const money=n=>Number(n||0).toLocaleString("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2});
+const pad=n=>String(n).padStart(2,"0");
+const dayKey=d=>{d=new Date(d);return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())};
+const hora=d=>{d=new Date(d);return pad(d.getHours())+":"+pad(d.getMinutes())};
+const ofDay=k=>orders.filter(o=>dayKey(o.ts)==k);
+const sum=l=>l.reduce((s,o)=>s+o.total,0);
+
+/* ---------- NAVEGACIÓN ---------- */
+function tab(n){[1,2,3].forEach(i=>{document.getElementById("v"+i).classList.toggle("hide",i!=n);document.getElementById("t"+i).classList.toggle("on",i==n)});
+ if(n==1)renderLive();if(n==2)goToday();if(n==3)renderStats();}
+
+/* ---------- NUEVO PEDIDO ---------- */
+function setType(t){type=t;bRes.classList.toggle("on",t=="Res");bPue.classList.toggle("on",t=="Puerco");renderProds()}
+function toggleEdit(){edit=!edit;bEdit.classList.toggle("on",edit);renderProds()}
+function renderProds(){
+ prods.innerHTML="";
+ PRODUCTS.filter(p=>p[0]==type).forEach(p=>{
+  const b=document.createElement("button");
+  b.innerHTML=p[1]+"<small>$"+price(p)+"/kg"+(edit?" ✏️":"")+"</small>";
+  b.onclick=()=>{
+   if(edit){const v=parseFloat(prompt("Nuevo precio por kg de "+p[1]+" ("+type+"):",price(p)));
+    if(v>0){prices[p[0]+"|"+p[1]]=v;save("prices",prices);renderProds()}return}
+   cart.push({tipo:p[0],producto:p[1],precioKg:price(p),dinero:0});renderCart()};
+  prods.appendChild(b)});
+}
+function renderCart(){
+ const el=document.getElementById("cart");
+ if(!cart.length){el.innerHTML='<p class="mut">Toca un producto para agregarlo.</p>';calc();return}
+ el.innerHTML=cart.map((c,i)=>
+  `<div class="row"><span><b>${c.tipo}</b> – ${c.producto}<br><small class="mut">$${c.precioKg}/kg → <span id="kg${i}">${(c.dinero/c.precioKg).toFixed(3)}</span> kg</small></span>
+   <input type="number" inputmode="decimal" placeholder="$ comprado" value="${c.dinero||""}" oninput="cart[${i}].dinero=parseFloat(this.value)||0;kgUpd(${i});calc()">
+   <button onclick="cart.splice(${i},1);renderCart()">✕</button></div>`).join("");
+ calc();
+}
+function kgUpd(i){document.getElementById("kg"+i).textContent=(cart[i].dinero/cart[i].precioKg).toFixed(3)}
+function calc(){
+ const t=cart.reduce((s,c)=>s+c.dinero,0);
+ total.textContent=money(t);
+ const p=parseFloat(paid.value)||0;change.textContent=p>t?money(p-t):"0.00";
+}
+function saveOrder(){
+ const items=cart.filter(c=>c.dinero>0);
+ if(!items.length){alert("Agrega al menos un producto con dinero comprado.");return}
+ const t=items.reduce((s,c)=>s+c.dinero,0);
+ orders.push({id:Date.now(),ts:new Date().toISOString(),
+  items:items.map(c=>({...c,kg:+(c.dinero/c.precioKg).toFixed(3)})),
+  total:+t.toFixed(2),pagoCon:parseFloat(paid.value)||t,synced:false});
+ save("orders",orders);
+ cart=[];paid.value="";renderCart();renderLive();syncPending(false);
+}
+function renderLive(){
+ const l=ofDay(dayKey(new Date()));
+ liveTotal.textContent=money(sum(l));liveCount.textContent=l.length;
+ const p=orders.filter(o=>!o.synced).length;
+ syncState.textContent=!syncUrlVal?"respaldo en Google no configurado":(p?p+" por enviar a Google":"✅ respaldado en Google");
+}
+
+/* ---------- CIERRE DEL DÍA ---------- */
+function goToday(){showDay(dayKey(new Date()));cur=new Date();renderCal()}
+function showDay(k){
+ if(!k)return;selDay=k;dayPick.value=k;
+ const l=ofDay(k),by={},tp={Res:0,Puerco:0};
+ l.forEach(o=>o.items.forEach(i=>{const key=i.tipo+"|"+i.producto;by[key]=by[key]||{tipo:i.tipo,producto:i.producto,kg:0,m:0};by[key].kg+=i.kg;by[key].m+=i.dinero;tp[i.tipo]+=i.dinero}));
+ const prodRows=Object.values(by).sort((a,b)=>a.tipo.localeCompare(b.tipo)||b.m-a.m);
+ summary.innerHTML=`
+  <div class="mut" style="text-align:center">Total del ${k.split("-").reverse().join("/")}</div>
+  <div class="big">$${money(sum(l))}</div>
+  <div class="mut" style="text-align:center">${l.length} pedidos · Res $${money(tp.Res)} · Puerco $${money(tp.Puerco)}</div>
+  <h4>Resumen por producto</h4>
+  ${prodRows.length?`<table><tr><th>Tipo</th><th>Producto</th><th class="num">Kg</th><th class="num">Dinero</th></tr>
+  ${prodRows.map(r=>`<tr><td>${r.tipo}</td><td>${r.producto}</td><td class="num">${r.kg.toFixed(3)}</td><td class="num">$${money(r.m)}</td></tr>`).join("")}
+  <tr><th colspan="3">TOTAL DEL DÍA</th><th class="num">$${money(sum(l))}</th></tr></table>`:'<p class="mut">Sin ventas este día.</p>'}
+  <h4>Pedidos (en orden)</h4>
+  ${l.length?`<table>${l.map((o,n)=>`<tr><td>#${n+1}<br><small class="mut">${hora(o.ts)}</small></td>
+  <td>${o.items.map(i=>`<span class="pill">${i.tipo}</span> ${i.producto} · $${money(i.dinero)} · ${i.kg} kg`).join("<br>")}</td>
+  <td class="num"><b>$${money(o.total)}</b></td></tr>`).join("")}</table>`:""}`;
+ dayXls.classList.toggle("hide",!l.length);renderCal();
+}
+function moveMonth(n){cur.setMonth(cur.getMonth()+n);renderCal()}
+function renderCal(){
+ const y=cur.getFullYear(),m=cur.getMonth();
+ mLabel.textContent=cur.toLocaleDateString("es-MX",{month:"long",year:"numeric"});
+ let h=["D","L","M","M","J","V","S"].map(d=>`<div class="h">${d}</div>`).join("");
+ for(let i=0;i<new Date(y,m,1).getDay();i++)h+="<div class='h'></div>";
+ for(let d=1;d<=new Date(y,m+1,0).getDate();d++){
+  const k=y+"-"+pad(m+1)+"-"+pad(d),t=sum(ofDay(k));
+  h+=`<div class="${k==selDay?"sel":""}" onclick="showDay('${k}')">${d}${t?`<b>$${money(t)}</b>`:""}</div>`}
+ cal.innerHTML=h;
+}
+
+/* ---------- EXCEL (tablas con formato, de arriba hacia abajo) ---------- */
+const XC={dark:"FF3A3A3A",red:"FFB3123F",green:"FF1F7A3D",light:"FFF6E9ED",grey:"FFF3F3F3",white:"FFFFFFFF"};
+const thin={style:"thin",color:{argb:"FFBBBBBB"}},BORD={top:thin,left:thin,bottom:thin,right:thin};
+const MONEY='"$"#,##0.00',KG='0.000';
+const FILL=c=>({type:"pattern",pattern:"solid",fgColor:{argb:c}});
+const fecha=k=>k.split("-").reverse().join("/");
+function put(ws,vals,o={}){
+ const row=ws.addRow(vals);
+ vals.forEach((v,i)=>{
+  if(o.skip&&o.skip.includes(i))return;
+  const c=row.getCell(i+1);c.border=BORD;
+  const num=o.fmt&&o.fmt[i];
+  c.alignment={vertical:"middle",horizontal:num?"right":(o.center&&o.center.includes(i)?"center":"left")};
+  if(num)c.numFmt=num;
+  if(o.fill)c.fill=FILL(o.fill);
+  if(o.bold||o.color)c.font={bold:!!o.bold,color:{argb:o.color||"FF000000"},size:o.size||11};
+ });
+ row.height=o.h||20;return row;
+}
+function banner(ws,text,cols,fill,size){
+ const row=ws.addRow([text]);ws.mergeCells(row.number,1,row.number,cols);
+ const c=row.getCell(1);c.value=text;c.fill=FILL(fill);c.font={bold:true,size:size,color:{argb:XC.white}};
+ c.alignment={horizontal:"center",vertical:"middle"};row.height=size+14;return row;
+}
+function setup(ws){ws.pageSetup={orientation:"portrait",fitToPage:true,fitToWidth:1,fitToHeight:0,paperSize:9}}
+function tipoProd(l){
+ const by={},tp={Res:0,Puerco:0};
+ l.forEach(o=>o.items.forEach(i=>{const key=i.tipo+"|"+i.producto;
+  by[key]=by[key]||{tipo:i.tipo,producto:i.producto,kg:0,n:0,m:0};
+  by[key].kg+=i.kg;by[key].n++;by[key].m+=i.dinero;tp[i.tipo]+=i.dinero}));
+ return{rows:Object.values(by).sort((a,b)=>a.tipo.localeCompare(b.tipo)||b.m-a.m),tp};
+}
+const DAYCOLS=[{width:10},{width:9},{width:11},{width:30},{width:12},{width:15},{width:16}];
+function dayBuild(wb,k){
+ const ws=wb.addWorksheet(k);ws.columns=DAYCOLS;
+ banner(ws,"CARNICERÍA CHÁVEZ",7,XC.red,18);
+ dayBlock(ws,k);ws.views=[{state:"frozen",ySplit:4}];setup(ws);
+}
+function dayBlock(ws,k){
+ const l=ofDay(k),{rows,tp}=tipoProd(l);
+ banner(ws,"Reporte del día "+fecha(k)+"  ·  "+l.length+" pedidos",7,XC.dark,12);
+ ws.addRow([]);
+ put(ws,["Pedido","Hora","Tipo","Producto","Kilos","Precio por kg","Dinero"],{fill:XC.dark,bold:true,color:XC.white,center:[0,1,2,3,4,5,6],h:24});
+ const F1={4:KG,5:MONEY,6:MONEY};
+ l.forEach((o,n)=>{
+  o.items.forEach(i=>put(ws,[n+1,hora(o.ts),i.tipo,i.producto,i.kg,i.precioKg,i.dinero],{fmt:F1,center:[0,1,2],fill:n%2?XC.grey:null}));
+  const r=put(ws,["","","","Total pedido #"+(n+1),"","",o.total],{fmt:F1,bold:true,fill:XC.light});
+  r.getCell(4).alignment={horizontal:"right"};
+ });
+ if(!l.length)put(ws,["","","","Sin ventas este día","","",0],{fmt:F1});
+ ws.addRow([]);
+ const t=put(ws,["","","","TOTAL DEL DÍA","","",sum(l)],{fmt:F1,bold:true,fill:XC.green,color:XC.white,size:13,h:26});t.getCell(4).alignment={horizontal:"right"};
+ ["Res","Puerco"].forEach(x=>{const r=put(ws,["","","","Subtotal "+x,"","",tp[x]],{fmt:F1,bold:true,fill:XC.light});r.getCell(4).alignment={horizontal:"right"}});
+ ws.addRow([]);
+ banner(ws,"RESUMEN POR PRODUCTO",7,XC.dark,12);
+ put(ws,["","","Tipo","Producto","Kilos","Veces vendido","Dinero"],{skip:[0,1],fill:XC.red,bold:true,color:XC.white,center:[2,3,4,5,6]});
+ rows.forEach((r,n)=>put(ws,["","",r.tipo,r.producto,+r.kg.toFixed(3),r.n,+r.m.toFixed(2)],{skip:[0,1],fmt:{4:KG,6:MONEY},center:[2,5],fill:n%2?XC.grey:null}));
+}
+async function saveWb(wb,name){
+ const buf=await wb.xlsx.writeBuffer(),a=document.createElement("a");
+ a.href=URL.createObjectURL(new Blob([buf],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}));
+ a.download=name;a.click();
+}
+function exportDay(k){
+ const wb=new ExcelJS.Workbook();dayBuild(wb,k);
+ saveWb(wb,"Carniceria_Chavez_"+k+".xlsx");
+}
+function exportAll(){
+ if(!orders.length){alert("Aún no hay pedidos.");return}
+ const days=[...new Set(orders.map(o=>dayKey(o.ts)))].sort(),wb=new ExcelJS.Workbook();
+
+ /* Hoja 0: todo por día, igual que se ve en la pantalla (día más reciente arriba) */
+ let ws=wb.addWorksheet("Todo por día",{properties:{tabColor:{argb:XC.red}}});
+ ws.columns=DAYCOLS;
+ banner(ws,"CARNICERÍA CHÁVEZ – PEDIDOS DÍA POR DÍA",7,XC.red,18);ws.addRow([]);
+ const g=put(ws,["","","","TOTAL GENERAL","","",sum(orders)],{fmt:{6:MONEY},bold:true,fill:XC.green,color:XC.white,size:13,h:26});
+ g.getCell(4).alignment={horizontal:"right",vertical:"middle"};
+ [...days].reverse().forEach(k=>{ws.addRow([]);ws.addRow([]);dayBlock(ws,k)});
+ setup(ws);
+
+ /* Hoja 1: Resumen por día */
+ ws=wb.addWorksheet("Resumen");
+ ws.columns=[{width:14},{width:10},{width:15},{width:15},{width:16},{width:18}];
+ banner(ws,"CARNICERÍA CHÁVEZ – RESUMEN POR DÍA",6,XC.red,16);ws.addRow([]);
+ put(ws,["Fecha","Pedidos","Res","Puerco","Total del día","Total acumulado"],{fill:XC.dark,bold:true,color:XC.white,center:[0,1,2,3,4,5],h:24});
+ ws.views=[{state:"frozen",ySplit:3}];
+ let run=0,np=0,tr=0,tpz=0;
+ days.forEach((k,n)=>{const l=ofDay(k),{tp}=tipoProd(l);run+=sum(l);np+=l.length;tr+=tp.Res;tpz+=tp.Puerco;
+  put(ws,[fecha(k),l.length,+tp.Res.toFixed(2),+tp.Puerco.toFixed(2),+sum(l).toFixed(2),+run.toFixed(2)],{fmt:{2:MONEY,3:MONEY,4:MONEY,5:MONEY},center:[0,1],fill:n%2?XC.grey:null})});
+ put(ws,["TOTAL",np,+tr.toFixed(2),+tpz.toFixed(2),+run.toFixed(2),+run.toFixed(2)],{fmt:{2:MONEY,3:MONEY,4:MONEY,5:MONEY},center:[0,1],bold:true,fill:XC.green,color:XC.white,h:24});
+ setup(ws);
+
+ /* Hoja 2: Por producto (todo el tiempo) */
+ ws=wb.addWorksheet("Por producto");
+ ws.columns=[{width:10},{width:30},{width:14},{width:16},{width:16}];
+ banner(ws,"VENTAS POR PRODUCTO (TODOS LOS DÍAS)",5,XC.red,16);ws.addRow([]);
+ put(ws,["Tipo","Producto","Kilos","Veces vendido","Dinero"],{fill:XC.dark,bold:true,color:XC.white,center:[0,1,2,3,4],h:24});
+ ws.views=[{state:"frozen",ySplit:3}];
+ const {rows}=tipoProd(orders);let tk=0,tn=0,tm=0;
+ rows.forEach((r,n)=>{tk+=r.kg;tn+=r.n;tm+=r.m;put(ws,[r.tipo,r.producto,+r.kg.toFixed(3),r.n,+r.m.toFixed(2)],{fmt:{2:KG,4:MONEY},center:[0,3],fill:n%2?XC.grey:null})});
+ put(ws,["","TOTAL",+tk.toFixed(3),tn,+tm.toFixed(2)],{fmt:{2:KG,4:MONEY},center:[3],bold:true,fill:XC.green,color:XC.white,h:24});
+ setup(ws);
+
+ /* Hoja 3: Detalle de todos los pedidos */
+ ws=wb.addWorksheet("Detalle");
+ ws.columns=[{width:13},{width:9},{width:10},{width:11},{width:30},{width:12},{width:15}];
+ banner(ws,"DETALLE DE TODOS LOS PEDIDOS",7,XC.red,16);ws.addRow([]);
+ put(ws,["Fecha","Hora","Pedido","Tipo","Producto","Kilos","Dinero"],{fill:XC.dark,bold:true,color:XC.white,center:[0,1,2,3,4,5,6],h:24});
+ ws.views=[{state:"frozen",ySplit:3}];
+ let z=0;
+ days.forEach(k=>ofDay(k).forEach((o,n)=>{z++;o.items.forEach(i=>put(ws,[fecha(k),hora(o.ts),n+1,i.tipo,i.producto,i.kg,i.dinero],{fmt:{5:KG,6:MONEY},center:[0,1,2,3],fill:z%2?null:XC.grey}))}));
+ ws.autoFilter={from:{row:3,column:1},to:{row:3,column:7}};
+ setup(ws);
+
+ /* Una hoja por cada día */
+ days.forEach(k=>dayBuild(wb,k));
+ saveWb(wb,"Carniceria_Chavez_completo_"+dayKey(new Date())+".xlsx");
+}
+
+/* ---------- RESPALDO EN GOOGLE SHEETS ---------- */
+function saveUrl(){syncUrlVal=syncUrl.value.trim();save("syncUrl",syncUrlVal);syncPending(true)}
+let syncing=false;
+async function syncPending(manual){
+ if(!syncUrlVal){if(manual)alert("Primero pega el enlace de Apps Script.");renderLive();return}
+ if(syncing)return;syncing=true;let n=0;
+ for(const o of orders.filter(o=>!o.synced)){
+  try{
+   await fetch(syncUrlVal,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain"},
+    body:JSON.stringify({id:o.id,fecha:dayKey(o.ts),hora:hora(o.ts),items:o.items,total:o.total,pagoCon:o.pagoCon})});
+   o.synced=true;n++;save("orders",orders);
+  }catch(e){break}
+ }
+ syncing=false;
+ const got=await pullCloud();
+ renderLive();renderStats();
+ if(!document.getElementById("v2").classList.contains("hide"))showDay(selDay);
+ if(manual)alert(got<0?"No se pudo leer Google Sheets. Revisa tu internet y que el script esté actualizado.":"✅ Enviados: "+n+" · Recibidos de otros dispositivos: "+got);
+}
+async function pullCloud(){
+ try{
+  const r=await fetch(syncUrlVal+(syncUrlVal.includes("?")?"&":"?")+"t="+Date.now());
+  const d=await r.json(),ids=new Set(orders.map(o=>String(o.id)));let n=0;
+  (d.orders||[]).forEach(o=>{if(!ids.has(String(o.id))){
+   orders.push({id:Number(o.id),ts:new Date(Number(o.id)).toISOString(),items:o.items,total:o.total,pagoCon:o.pagoCon,synced:true});n++}});
+  if(n){orders.sort((a,b)=>a.ts<b.ts?-1:1);save("orders",orders)}
+  return n;
+ }catch(e){return -1}
+}
+window.addEventListener("online",()=>syncPending(false));
+
+/* ---------- RESPALDO EN ARCHIVO ---------- */
+function exportJSON(){
+ const a=document.createElement("a");
+ a.href=URL.createObjectURL(new Blob([JSON.stringify({orders,prices})],{type:"application/json"}));
+ a.download="respaldo_carniceria_chavez_"+dayKey(new Date())+".json";a.click();
+}
+function importJSON(el){
+ const f=el.files[0];if(!f)return;const r=new FileReader();
+ r.onload=()=>{try{const d=JSON.parse(r.result),ids=new Set(orders.map(o=>o.id));let n=0;
+  (d.orders||[]).forEach(o=>{if(!ids.has(o.id)){orders.push(o);n++}});
+  orders.sort((a,b)=>a.ts<b.ts?-1:1);prices={...(d.prices||{}),...prices};
+  save("orders",orders);save("prices",prices);renderStats();alert("Se agregaron "+n+" pedidos.")}
+  catch(e){alert("Archivo no válido")}};
+ r.readAsText(f);
+}
+function renderStats(){
+ grand.textContent=money(sum(orders));
+ stats.textContent=orders.length+" pedidos guardados · "+orders.filter(o=>!o.synced).length+" sin enviar a Google";
+ syncUrl.value=syncUrlVal;
+}
+
+renderProds();renderLive();syncPending(false);
+setInterval(()=>syncPending(false),60000);
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)syncPending(false)});
+</script>
+</body>
+</html>
