@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Carnicería Chávez – Registro de pedidos</title>
+<title>Carnicería Fredy – Registro de pedidos</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <style>
 :root{--bg:#f6f3ef;--card:#fff;--tx:#222;--mut:#777;--red:#b3123f;--bd:#e3ddd5;--ok:#1f7a3d}
@@ -36,7 +36,7 @@ table{width:100%;border-collapse:collapse;margin:6px 0}td,th{padding:6px;border-
 </style>
 </head>
 <body>
-<header>🥩 Carnicería Chávez</header>
+<header>🥩 Carnicería Fredy</header>
 <nav>
  <button id="t1" class="on" onclick="tab(1)">Nuevo pedido</button>
  <button id="t2" onclick="tab(2)">Cierre del día</button>
@@ -251,7 +251,7 @@ function tipoProd(l){
 const DAYCOLS=[{width:10},{width:9},{width:11},{width:30},{width:12},{width:15},{width:16}];
 function dayBuild(wb,k){
  const ws=wb.addWorksheet(k);ws.columns=DAYCOLS;
- banner(ws,"CARNICERÍA CHÁVEZ",7,XC.red,18);
+ banner(ws,"CARNICERÍA FREDY",7,XC.red,18);
  dayBlock(ws,k);ws.views=[{state:"frozen",ySplit:4}];setup(ws);
 }
 function dayBlock(ws,k){
@@ -281,7 +281,7 @@ async function saveWb(wb,name){
 }
 function exportDay(k){
  const wb=new ExcelJS.Workbook();dayBuild(wb,k);
- saveWb(wb,"Carniceria_Chavez_"+k+".xlsx");
+ saveWb(wb,"Carniceria_Fredy_"+k+".xlsx");
 }
 function exportAll(){
  if(!orders.length){alert("Aún no hay pedidos.");return}
@@ -290,7 +290,7 @@ function exportAll(){
  /* Hoja 0: todo por día, igual que se ve en la pantalla (día más reciente arriba) */
  let ws=wb.addWorksheet("Todo por día",{properties:{tabColor:{argb:XC.red}}});
  ws.columns=DAYCOLS;
- banner(ws,"CARNICERÍA CHÁVEZ – PEDIDOS DÍA POR DÍA",7,XC.red,18);ws.addRow([]);
+ banner(ws,"CARNICERÍA FREDY – PEDIDOS DÍA POR DÍA",7,XC.red,18);ws.addRow([]);
  const g=put(ws,["","","","TOTAL GENERAL","","",sum(orders)],{fmt:{6:MONEY},bold:true,fill:XC.green,color:XC.white,size:13,h:26});
  g.getCell(4).alignment={horizontal:"right",vertical:"middle"};
  [...days].reverse().forEach(k=>{ws.addRow([]);ws.addRow([]);dayBlock(ws,k)});
@@ -299,7 +299,7 @@ function exportAll(){
  /* Hoja 1: Resumen por día */
  ws=wb.addWorksheet("Resumen");
  ws.columns=[{width:14},{width:10},{width:15},{width:15},{width:16},{width:18}];
- banner(ws,"CARNICERÍA CHÁVEZ – RESUMEN POR DÍA",6,XC.red,16);ws.addRow([]);
+ banner(ws,"CARNICERÍA FREDY – RESUMEN POR DÍA",6,XC.red,16);ws.addRow([]);
  put(ws,["Fecha","Pedidos","Res","Puerco","Total del día","Total acumulado"],{fill:XC.dark,bold:true,color:XC.white,center:[0,1,2,3,4,5],h:24});
  ws.views=[{state:"frozen",ySplit:3}];
  let run=0,np=0,tr=0,tpz=0;
@@ -332,7 +332,7 @@ function exportAll(){
 
  /* Una hoja por cada día */
  days.forEach(k=>dayBuild(wb,k));
- saveWb(wb,"Carniceria_Chavez_completo_"+dayKey(new Date())+".xlsx");
+ saveWb(wb,"Carniceria_Fredy_completo_"+dayKey(new Date())+".xlsx");
 }
 
 /* ---------- RESPALDO EN GOOGLE SHEETS ---------- */
@@ -370,7 +370,7 @@ window.addEventListener("online",()=>syncPending(false));
 function exportJSON(){
  const a=document.createElement("a");
  a.href=URL.createObjectURL(new Blob([JSON.stringify({orders,prices})],{type:"application/json"}));
- a.download="respaldo_carniceria_chavez_"+dayKey(new Date())+".json";a.click();
+ a.download="respaldo_carniceria_fredy_"+dayKey(new Date())+".json";a.click();
 }
 function importJSON(el){
  const f=el.files[0];if(!f)return;const r=new FileReader();
