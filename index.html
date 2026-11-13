@@ -56,6 +56,7 @@ table{width:100%;border-collapse:collapse;margin:6px 0}td,th{padding:6px;border-
    <button id="bRes" class="on" onclick="setType('Res')">RES</button>
    <button id="bPue" onclick="setType('Puerco')">PUERCO</button>
    <button id="bEdit" onclick="toggleEdit()">✏️ Precios</button>
+   <button onclick="addProduct()">➕ Agregar producto</button>
   </div>
   <div id="prods" class="grid"></div>
  </div>
@@ -123,6 +124,8 @@ const load=(k,d)=>{try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}
 const save=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){alert("⚠️ No se pudo guardar en este navegador. Descarga el Excel ya.")}};
 try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}
 const DEFAULT_URL=""; // ← pega aquí tu enlace de Apps Script (entre las comillas) para que todos tus dispositivos lo usen solos
+const customProducts=load("customProducts",[]);
+const ALL=()=>PRODUCTS.concat(customProducts);
 let prices=load("prices",{}),orders=load("orders",[]),syncUrlVal=load("syncUrl","")||DEFAULT_URL;
 let cart=[],type="Res",edit=false,selDay=null,cur=new Date();
 const price=p=>prices[p[0]+"|"+p[1]]??p[2];
@@ -142,14 +145,26 @@ function setType(t){type=t;bRes.classList.toggle("on",t=="Res");bPue.classList.t
 function toggleEdit(){edit=!edit;bEdit.classList.toggle("on",edit);renderProds()}
 function renderProds(){
  prods.innerHTML="";
- PRODUCTS.filter(p=>p[0]==type).forEach(p=>{
+ ALL().filter(p=>p[0]==type).forEach(p=>{
   const b=document.createElement("button");
   b.innerHTML=p[1]+"<small>$"+price(p)+"/kg"+(edit?" ✏️":"")+"</small>";
   b.onclick=()=>{
-   if(edit){const v=parseFloat(prompt("Nuevo precio por kg de "+p[1]+" ("+type+"):",price(p)));
+   if(edit){
+    const mine=customProducts.indexOf(p)>-1;
+    const t=prompt("Nuevo precio por kg de "+p[1]+" ("+type+"):"+(mine?"\n(Escribe QUITAR para sacar este producto de la lista; los pedidos ya guardados no se afectan)":""),price(p));
+    if(t===null)return;
+    if(mine&&t.trim().toUpperCase()=="QUITAR"){customProducts.splice(customProducts.indexOf(p),1);save("customProducts",customProducts);renderProds();return}
+    const v=parseFloat(t);
     if(v>0){prices[p[0]+"|"+p[1]]=v;save("prices",prices);renderProds()}return}
    cart.push({tipo:p[0],producto:p[1],precioKg:price(p),dinero:0});renderCart()};
   prods.appendChild(b)});
+}
+function addProduct(){
+ const n=(prompt("Nombre del producto nuevo ("+type+"):")||"").trim();if(!n)return;
+ const pr=parseFloat(prompt("Precio por kg de "+n+" ($):"));
+ if(!(pr>0)){alert("Precio no válido");return}
+ if(ALL().some(p=>p[0]==type&&p[1].toLowerCase()==n.toLowerCase())){alert("Ese producto ya existe en "+type);return}
+ customProducts.push([type,n,pr]);save("customProducts",customProducts);renderProds();
 }
 function renderCart(){
  const el=document.getElementById("cart");
